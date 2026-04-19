@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  namespace: demo-app
+  labels:
+    app: demo-app
+    managed-by: emmanuel-ubani
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+      annotations:
+        # Vault Agent sidecar injection annotations
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "demo-app"
+        vault.hashicorp.com/agent-inject-status: "update"
+
+        # Inject KV secret as config file
+        vault.hashicorp.com/agent-inject-secret-config.json: >-
+          secret/data/apps/demo-app/config
+        vault.hashicorp.com/agent-inject-template-config.json: |
+          {{- with secret "secret/data/apps/demo-app/config" -}}
+          {
+            "app_name": "{{ .Data.data.app_name }}",
+            "app_version": "{{ .Data.data.app_version }}",
+            "log_level": "{{ .Data.data.log_level }}"
+          }
+          {{- end }}
+
+        # Inject dynamic AWS credentials
+        vault.hashicorp.com/agent-inject-secret-aws-creds: >-
+          aws/creds/demo-app-role
+        vault.hashicorp.com/agent-inject-template-aws-creds: |
+          {{- with secret "aws/creds/demo-app-role" -}}
+          export AWS_ACCESS_KEY_ID="{{ .Data.access_key }}"
+          export AWS_SECRET_ACCESS_KEY="{{ .Data.secret_key }}"
+          {{- end }}
+
+        # Inject dynamic database credentials
+        vault.hashicorp.com/agent-inject-secret-db-creds: >-
+          database/creds/demo-app-db-role
+        vault.hashicorp.com/agent-inject-template-db-creds: |
+          {{- with secret "database/creds/demo-app-db-role" -}}
+          DB_USERNAME="{{ .Data.username }}"
+          DB_PASSWORD="{{ .Data.password }}"
+          {{- end }}
+
+        # Inject PKI certificate
+        vault.hashicorp.com/agent-inject-secret-tls.crt: >-
+          pki_int/issue/demo-app
+        vault.hashicorp.com/agent-inject-template-tls.crt: |
+          {{- with secret "pki_int/issue/demo-app" "common_name=demo-app.vault-eks.internal" "ttl=24h" -}}
+          {{ .Data.certificate }}
+          {{- end }}
+
+        # Agent resource limits
+        vault.hashicorp.com/agent-limits-cpu: "100m"
+        vault.hashicorp.com/agent-limits-mem: "128Mi"
+        vault.hashicorp.com/agent-requests-cpu: "50m"
+        vault.hashicorp.com/agent-requests-mem: "64Mi"
+
+    spec:
+      serviceAccountName: demo-app
+      containers:
+        - name: demo-app
+          image: eaglewings6/devops-demo-app:latest
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+          volumeMounts:
+            - name: vault-secrets
+              mountPath: /vault/secrets
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: vault-secrets
+          emptyDir:
+            medium: Memory

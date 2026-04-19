@@ -1,0 +1,151 @@
+# HashiCorp Vault Helm Values
+# 5-replica HA cluster with Raft integrated storage
+# AWS KMS auto-unseal
+# Vault Agent injector enabled
+
+global:
+  enabled: true
+  tlsDisable: true  # TLS handled at ingress level
+
+injector:
+  enabled: true
+  replicas: 2
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+  affinity: ""
+
+server:
+  enabled: true
+  image:
+    repository: "hashicorp/vault"
+    pullPolicy: IfNotPresent
+
+  # EC2 worker node resource requirements
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+  # Readiness and liveness probes
+  readinessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true"
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 3
+
+  livenessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true"
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    failureThreshold: 5
+
+  # Vault server configuration
+  standalone:
+    enabled: false
+
+  ha:
+    enabled: true
+    replicas: 5
+    raft:
+      enabled: true
+      setNodeId: true
+
+      config: |
+        ui = true
+
+        listener "tcp" {
+          tls_disable     = 1
+          address         = "[::]:8200"
+          cluster_address = "[::]:8201"
+
+          telemetry {
+            unauthenticated_metrics_access = "true"
+          }
+        }
+
+        storage "raft" {
+          path    = "/vault/data"
+          node_id = "{{ .NodeID }}"
+
+          retry_join {
+            leader_api_addr = "http://vault-0.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-1.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-2.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-3.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-4.vault-internal:8200"
+          }
+        }
+
+        seal "awskms" {
+          region     = "us-east-1"
+          kms_key_id = "${VAULT_AWSKMS_SEAL_KEY_ID}"
+        }
+
+        service_registration "kubernetes" {}
+
+        telemetry {
+          prometheus_retention_time = "30s"
+          disable_hostname          = true
+        }
+
+        api_addr     = "http://$(POD_IP):8200"
+        cluster_addr = "http://$(POD_IP):8201"
+        cluster_name = "vault-eks-ha"
+
+  # Data storage for Raft
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: null
+    accessMode: ReadWriteOnce
+
+  # Audit log storage
+  auditStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: null
+    accessMode: ReadWriteOnce
+
+  # Vault StatefulSet requires persistent volumes, so schedule it on
+  # the dedicated EC2 node group instead of the Fargate profile.
+  nodeSelector:
+    workload: vault
+
+  # Pod disruption budget — keep quorum
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 2  # With 5 replicas, quorum needs 3
+
+  # Affinity - spread across nodes/AZs
+  affinity: ""
+
+  # Service type - ClusterIP for internal access
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 8200
+    targetPort: 8200
+
+ui:
+  enabled: true
+  serviceType: ClusterIP
+  serviceNodePort: null
+  externalPort: 8200

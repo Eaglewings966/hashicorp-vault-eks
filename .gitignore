@@ -1,0 +1,14 @@
+.terraform/
+*.tfstate
+*.tfstate.backup
+terraform.tfvars
+.terraform.lock.hcl
+*.pem
+*.key
+*.crt
+.env
+vault-keys.json
+vault-root-token.txt
+*.token
+unseal-keys/
+EOF
