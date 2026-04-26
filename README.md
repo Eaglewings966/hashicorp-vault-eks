@@ -1,4 +1,4 @@
-markdown<div align="center">
+<div align="center">
 
 # HashiCorp Vault HA Cluster on AWS EKS
 
@@ -87,6 +87,7 @@ human intervention.
 ---
 
 ## Architecture Overview
+```
 ┌──────────────────────────────────────────────────────────────────┐
 │                    AWS us-east-1                                  │
 │                                                                  │
@@ -133,6 +134,7 @@ human intervention.
 │  RDS PostgreSQL ────────────────────────────────────────────┘    │
 │  (Vault owns root password after rotation)                       │
 └──────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -207,6 +209,7 @@ code has zero dependency on Vault's API.
 ---
 
 ## Project Structure
+```
 hashicorp-vault-eks/
 │
 ├── terraform/
@@ -215,34 +218,42 @@ hashicorp-vault-eks/
 │   ├── iam.tf               # IRSA role, OIDC provider, IAM policies
 │   ├── variables.tf         # All configurable variables
 │   ├── outputs.tf           # KMS ID, RDS endpoint, role ARNs
-│   └── versions.tf          # Provider version constraints
+│   ├── versions.tf          # Provider version constraints
+│   └── terraform.tfvars     # Variable values (not committed)
 │
 ├── helm/vault/
 │   └── values.yaml          # 5-replica HA Vault with Raft config
 │
 ├── vault-config/
-│   ├── policies/
-│   │   ├── admin-policy.hcl      # Full admin access policy
-│   │   ├── app-policy.hcl        # App read-only policy
-│   │   └── pki-policy.hcl        # Certificate issuance policy
 │   ├── auth/
-│   │   └── kubernetes-auth.sh    # Kubernetes auth method setup
+│   │   └── kubernetes-auth.sh         # Kubernetes auth method setup
+│   ├── pki/
+│   │   └── pki-setup.sh               # Internal CA setup
+│   ├── policies/
+│   │   ├── admin-policy.hcl           # Full admin access policy
+│   │   ├── app-policy.hcl             # App read-only policy
+│   │   └── pki-policy.hcl             # Certificate issuance policy
 │   └── secrets/
 │       ├── aws-secrets-engine.sh      # AWS dynamic credentials
 │       ├── database-secrets-engine.sh # PostgreSQL dynamic creds
-│       ├── kv-secrets-engine.sh       # KV v2 static secrets
-│       └── pki-setup.sh               # Internal CA setup
+│       ├── demo-app-aws-policy.json   # IAM policy for demo app role
+│       └── kv-secrets-engine.sh       # KV v2 static secrets
 │
 ├── apps/demo-app/
-│   ├── serviceaccount.yaml  # Service account for K8s auth
-│   └── deployment.yaml      # App with Vault Agent sidecar
+│   ├── deployment.yaml      # App with Vault Agent sidecar
+│   └── serviceaccount.yaml  # Service account for K8s auth
+│
+├── docs/
+│   └── vault-ec2-migration.md  # EC2 migration reference
 │
 ├── scripts/
-│   ├── vault-init.sh        # One-time initialization script
-│   └── vault-verify.sh      # Verification and health check
+│   ├── create-vault-nodegroup.ps1  # EKS node group provisioning
+│   ├── vault-init.sh               # One-time initialization script
+│   └── vault-verify.sh             # Verification and health check
 │
 ├── .gitignore
 └── README.md
+```
 
 ---
 
