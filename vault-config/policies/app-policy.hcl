@@ -22,7 +22,7 @@ path "database/creds/demo-app-db-role" {
 }
 
 # PKI — request certificates
-path "pki/issue/demo-app" {
+path "pki_int/issue/demo-app" {
   capabilities = ["create", "update"]
 }
 

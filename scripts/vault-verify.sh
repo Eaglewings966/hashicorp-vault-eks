@@ -13,6 +13,11 @@ else
   exit 1
 fi
 
+if ! command -v vault >/dev/null 2>&1; then
+  echo "vault CLI is not installed or not available in PATH"
+  exit 1
+fi
+
 echo "================================================"
 echo "Vault HA Cluster Verification"
 echo "================================================"
@@ -27,7 +32,7 @@ echo "Checking Vault cluster status..."
 
 echo ""
 echo "Checking Raft cluster members..."
-"${KUBECTL_BIN}" exec vault-0 -n vault -- 
+"${KUBECTL_BIN}" exec vault-0 -n vault -- \
   vault operator raft list-peers
 
 echo ""
@@ -52,8 +57,8 @@ vault read database/creds/demo-app-db-role
 
 echo ""
 echo "Checking PKI certificate issuance..."
-vault write pki_int/issue/demo-app 
-  common_name="verify-test.vault-eks.internal" 
+vault write pki_int/issue/demo-app \
+  common_name="verify-test.vault-eks.internal" \
   ttl=1h | grep "common_name"
 
 echo ""

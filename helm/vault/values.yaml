@@ -12,11 +12,11 @@ injector:
   replicas: 2
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "250m"
+      memory: "128Mi"
+      cpu: "100m"
     limits:
       memory: "256Mi"
-      cpu: "500m"
+      cpu: "250m"
   affinity: ""
 
 server:
@@ -28,11 +28,11 @@ server:
   # EC2 worker node resource requirements
   resources:
     requests:
-      memory: "512Mi"
-      cpu: "250m"
+      memory: "256Mi"
+      cpu: "150m"
     limits:
-      memory: "1Gi"
-      cpu: "1000m"
+      memory: "512Mi"
+      cpu: "500m"
 
   # Readiness and liveness probes
   readinessProbe:
@@ -77,21 +77,12 @@ server:
           path    = "/vault/data"
           node_id = "{{ .NodeID }}"
 
+          {{- $replicas := .Values.server.ha.replicas | int -}}
+          {{- range $i := until $replicas }}
           retry_join {
-            leader_api_addr = "http://vault-0.vault-internal:8200"
+            leader_api_addr = "http://{{ $.Release.Name }}-{{ $i }}.{{ $.Release.Name }}-internal:8200"
           }
-          retry_join {
-            leader_api_addr = "http://vault-1.vault-internal:8200"
-          }
-          retry_join {
-            leader_api_addr = "http://vault-2.vault-internal:8200"
-          }
-          retry_join {
-            leader_api_addr = "http://vault-3.vault-internal:8200"
-          }
-          retry_join {
-            leader_api_addr = "http://vault-4.vault-internal:8200"
-          }
+          {{- end }}
         }
 
         seal "awskms" {
@@ -114,14 +105,14 @@ server:
   dataStorage:
     enabled: true
     size: 10Gi
-    storageClass: null
+    storageClass: gp2
     accessMode: ReadWriteOnce
 
   # Audit log storage
   auditStorage:
     enabled: true
     size: 10Gi
-    storageClass: null
+    storageClass: gp2
     accessMode: ReadWriteOnce
 
   # Vault StatefulSet requires persistent volumes, so schedule it on

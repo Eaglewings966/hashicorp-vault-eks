@@ -23,9 +23,9 @@ spec:
 
         # Inject KV secret as config file
         vault.hashicorp.com/agent-inject-secret-config.json: >-
-          secret/data/apps/demo-app/config
+          secret/apps/demo-app/config
         vault.hashicorp.com/agent-inject-template-config.json: |
-          {{- with secret "secret/data/apps/demo-app/config" -}}
+          {{- with secret "secret/apps/demo-app/config" -}}
           {
             "app_name": "{{ .Data.data.app_name }}",
             "app_version": "{{ .Data.data.app_version }}",
@@ -74,20 +74,16 @@ spec:
             - containerPort: 3000
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "250m"
+              memory: "256Mi"
+              cpu: "100m"
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "256Mi"
+              cpu: "250m"
           env:
             - name: NODE_ENV
               value: "production"
             - name: PORT
               value: "3000"
-          volumeMounts:
-            - name: vault-secrets
-              mountPath: /vault/secrets
-              readOnly: true
           livenessProbe:
             httpGet:
               path: /
@@ -100,7 +96,3 @@ spec:
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 10
-      volumes:
-        - name: vault-secrets
-          emptyDir:
-            medium: Memory

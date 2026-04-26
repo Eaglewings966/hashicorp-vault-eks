@@ -17,25 +17,29 @@ else
   exit 1
 fi
 
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is not installed or not available in PATH"
+  exit 1
+fi
+
 echo "================================================"
 echo "HashiCorp Vault HA Cluster Initialization"
 echo "================================================"
 
 # Wait for all Vault pods to be ready
 echo "Waiting for all 5 Vault pods to be Running..."
-"${KUBECTL_BIN}" wait pods 
-  -n "${VAULT_NAMESPACE}" 
-  -l app.kubernetes.io/name=vault 
-  --for=condition=Ready 
+"${KUBECTL_BIN}" wait --for=condition=Ready pods \
+  -n "${VAULT_NAMESPACE}" \
+  -l app.kubernetes.io/name=vault \
   --timeout=300s
 
 echo "All Vault pods are Running"
 
 # Check current Vault status
 echo "Checking Vault initialization status..."
-INIT_STATUS=$("${KUBECTL_BIN}" exec "${VAULT_POD}" 
-  -n "${VAULT_NAMESPACE}" -- 
-  vault status -format=json 2>/dev/null | 
+INIT_STATUS=$("${KUBECTL_BIN}" exec "${VAULT_POD}" \
+  -n "${VAULT_NAMESPACE}" -- \
+  vault status -format=json 2>/dev/null | \
   jq -r '.initialized')
 
 if [ "${INIT_STATUS}" == "true" ]; then
@@ -47,34 +51,43 @@ fi
 # 5 key shares, 3 key threshold for quorum
 # With KMS auto-unseal, Vault only uses these for recovery
 echo "Initializing Vault with 5 key shares and 3 key threshold..."
-INIT_OUTPUT=$("${KUBECTL_BIN}" exec "${VAULT_POD}" 
-  -n "${VAULT_NAMESPACE}" -- 
-  vault operator init 
-    -key-shares=5 
-    -key-threshold=3 
-    -recovery-shares=5 
-    -recovery-threshold=3 
+INIT_OUTPUT=$("${KUBECTL_BIN}" exec "${VAULT_POD}" \
+  -n "${VAULT_NAMESPACE}" -- \
+  vault operator init \
+    -key-shares=5 \
+    -key-threshold=3 \
+    -recovery-shares=5 \
+    -recovery-threshold=3 \
     -format=json)
 
-echo "${INIT_OUTPUT}" > vault-init-output.json
-
-# Extract root token
+# Extract root token and recovery keys
 ROOT_TOKEN=$(echo "${INIT_OUTPUT}" | jq -r '.root_token')
+RECOVERY_KEYS=$(echo "${INIT_OUTPUT}" | jq '.recovery_keys_b64')
 
 echo ""
 echo "================================================"
-echo "VAULT INITIALIZATION COMPLETE"
+echo "      VAULT INITIALIZATION COMPLETE"
 echo "================================================"
 echo ""
-echo "CRITICAL: Save these recovery keys immediately."
-echo "They are required to recover Vault if KMS is lost."
+echo "!!! CRITICAL SECURITY INFORMATION !!!"
+echo "The following output contains your Vault cluster's"
+echo "recovery keys and initial root token."
 echo ""
-echo "${INIT_OUTPUT}" | jq '.recovery_keys_b64[]'
+echo "DO NOT close this terminal until you have saved this"
+echo "information in a secure location (e.g., a password manager)."
+echo "This is the ONLY time this information will be displayed."
+echo "------------------------------------------------"
 echo ""
-echo "Root Token: ${ROOT_TOKEN}"
+echo "Recovery Keys (save all of them):"
+echo "${RECOVERY_KEYS}"
 echo ""
-echo "Store these in a secure offline location NOW."
+echo "Initial Root Token:"
+echo "${ROOT_TOKEN}"
+echo ""
+echo "------------------------------------------------"
 echo "================================================"
+
+read -p "Have you saved the recovery keys and root token securely? Press Enter to continue..."
 
 # Set VAULT_TOKEN for subsequent commands
 export VAULT_TOKEN="${ROOT_TOKEN}"
